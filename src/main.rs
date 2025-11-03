@@ -71,7 +71,7 @@ fn is_loopback_to_self(host: &str, _port: u16) -> bool {
     let is_same_host = if let Ok(target_ip) = IpAddr::from_str(host) {
         target_ip.is_loopback()
             || target_ip.is_unspecified()
-            || IpAddr::from_str(&CONFIG.proxy_host).map_or(false, |our_ip| target_ip == our_ip)
+            || (IpAddr::from_str(&CONFIG.proxy_host) == Ok(target_ip))
     } else {
         let host_lower = host.to_lowercase();
         host_lower == "localhost" || host_lower == CONFIG.proxy_host.to_lowercase()
@@ -1037,16 +1037,16 @@ async fn handle_tcp_tunnel(
         .and_then(|p| p.parse::<u16>().ok())
         .unwrap_or(443);
 
-    if let Some(ref hostname) = host {
-        if is_loopback_to_self(hostname, port) {
-            warn!(
-                "Blocked TCP tunnel loop-back attempt from {} to {}:{}",
-                client_addr.ip(),
-                hostname,
-                port
-            );
-            return Ok(());
-        }
+    if let Some(ref hostname) = host
+        && is_loopback_to_self(hostname, port)
+    {
+        warn!(
+            "Blocked TCP tunnel loop-back attempt from {} to {}:{}",
+            client_addr.ip(),
+            hostname,
+            port
+        );
+        return Ok(());
     }
 
     let ctx = RequestContext {
