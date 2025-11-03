@@ -1,0 +1,20 @@
+name: Create Release
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'Cargo.toml'
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: jokelbaf/rust-release@master
+        with:
+          manifest_path: 'Cargo.toml'

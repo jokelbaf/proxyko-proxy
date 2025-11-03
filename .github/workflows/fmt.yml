@@ -1,0 +1,35 @@
+name: Format code
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v5
+
+      - name: Set up Rust
+        run: |
+          rustup update nightly
+          rustup default nightly
+          rustup component add rustfmt
+
+      - name: Generate build artifacts
+        run: cargo check --all
+
+      - name: Format code
+        run: cargo fmt --all
+
+      - name: Commit and push if needed
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet; then
+            git add .
+            git commit -m "style: Auto-format via cargo fmt"
+            git push
+          fi
