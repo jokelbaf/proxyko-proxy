@@ -67,6 +67,23 @@ impl Config {
     }
 }
 
+fn is_loopback_to_self(host: &str, _port: u16) -> bool {
+    let is_same_host = if let Ok(target_ip) = IpAddr::from_str(host) {
+        target_ip.is_loopback()
+            || target_ip.is_unspecified()
+            || IpAddr::from_str(&CONFIG.proxy_host).map_or(false, |our_ip| target_ip == our_ip)
+    } else {
+        let host_lower = host.to_lowercase();
+        host_lower == "localhost" || host_lower == CONFIG.proxy_host.to_lowercase()
+    };
+
+    if !is_same_host {
+        return false;
+    }
+
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ProxyStatus {
     enabled: bool,
@@ -531,6 +548,17 @@ async fn proxy_http_direct(req: Request<Incoming>) -> Result<Response<Full<Bytes
         .and_then(|h| h.to_str().ok())
         .unwrap_or("unknown");
 
+    let (host_name, port) = if let Some((h, p)) = host.split_once(':') {
+        (h, p.parse().unwrap_or(if scheme == "https" { 443 } else { 80 }))
+    } else {
+        (host, if scheme == "https" { 443 } else { 80 })
+    };
+
+    if is_loopback_to_self(host_name, port) {
+        warn!("Blocked loop-back attempt to {}:{}", host_name, port);
+        return Err(anyhow::anyhow!("Loop-back to proxy detected"));
+    }
+
     let absolute_url = if uri.path_and_query().is_some() {
         format!("{}://{}{}", scheme, host, uri.path_and_query().unwrap())
     } else {
@@ -573,6 +601,14 @@ async fn proxy_http_via_forward(
         .forward_port
         .ok_or_else(|| anyhow::anyhow!("Forward rule missing forward_port"))?;
     let forward_protocol = rule.forward_protocol.as_deref().unwrap_or("http");
+
+    if is_loopback_to_self(forward_host, forward_port as u16) {
+        warn!(
+            "Blocked loop-back attempt: forward rule '{}' points to self ({}:{})",
+            rule.name, forward_host, forward_port
+        );
+        return Err(anyhow::anyhow!("Forward rule would create loop-back to proxy"));
+    }
 
     let method = req.method().clone();
     let uri = req.uri().clone();
@@ -800,6 +836,18 @@ async fn handle_https_connect(
         (host_port.to_string(), 443)
     };
 
+    if is_loopback_to_self(&host, port) {
+        warn!(
+            "Blocked HTTPS CONNECT loop-back attempt from {} to {}:{}",
+            client_addr.ip(),
+            host,
+            port
+        );
+        return Ok(Response::builder()
+            .status(StatusCode::FORBIDDEN)
+            .body(Full::new(Bytes::from("Loop-back to proxy detected")))?);
+    }
+
     let ctx = RequestContext {
         client_ip: client_addr.ip(),
         protocol: "https".to_string(),
@@ -846,6 +894,18 @@ async fn handle_https_connect(
                 let forward_port = rule
                     .forward_port
                     .ok_or_else(|| anyhow::anyhow!("Forward rule missing forward_port"))?;
+
+                if is_loopback_to_self(forward_host, forward_port as u16) {
+                    warn!(
+                        "Blocked HTTPS CONNECT loop-back: forward rule '{}' points to self ({}:{})",
+                        rule.name, forward_host, forward_port
+                    );
+                    drop(rules);
+                    return Ok(Response::builder()
+                        .status(StatusCode::FORBIDDEN)
+                        .body(Full::new(Bytes::from("Forward rule would create loop-back to proxy")))?);
+                }
+                
                 debug!(
                     "Forwarding HTTPS CONNECT through proxy {}:{}",
                     forward_host, forward_port
@@ -966,6 +1026,18 @@ async fn handle_tcp_tunnel(
         .and_then(|p| p.parse::<u16>().ok())
         .unwrap_or(443);
 
+    if let Some(ref hostname) = host {
+        if is_loopback_to_self(hostname, port) {
+            warn!(
+                "Blocked TCP tunnel loop-back attempt from {} to {}:{}",
+                client_addr.ip(),
+                hostname,
+                port
+            );
+            return Ok(());
+        }
+    }
+
     let ctx = RequestContext {
         client_ip: client_addr.ip(),
         protocol: "tcp".to_string(),
@@ -1019,6 +1091,16 @@ async fn handle_tcp_tunnel(
                         return Ok(());
                     }
                 };
+
+                if is_loopback_to_self(forward_host, forward_port as u16) {
+                    warn!(
+                        "Blocked TCP tunnel loop-back: forward rule '{}' points to self ({}:{})",
+                        rule.name, forward_host, forward_port
+                    );
+                    drop(rules);
+                    return Ok(());
+                }
+                
                 let target_host = host.clone().unwrap_or_default();
                 debug!(
                     "Forwarding TCP connection through proxy {}:{}",
