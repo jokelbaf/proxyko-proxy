@@ -549,7 +549,11 @@ async fn proxy_http_direct(req: Request<Incoming>) -> Result<Response<Full<Bytes
         .unwrap_or("unknown");
 
     let (host_name, port) = if let Some((h, p)) = host.split_once(':') {
-        (h, p.parse().unwrap_or(if scheme == "https" { 443 } else { 80 }))
+        (
+            h,
+            p.parse()
+                .unwrap_or(if scheme == "https" { 443 } else { 80 }),
+        )
     } else {
         (host, if scheme == "https" { 443 } else { 80 })
     };
@@ -607,7 +611,9 @@ async fn proxy_http_via_forward(
             "Blocked loop-back attempt: forward rule '{}' points to self ({}:{})",
             rule.name, forward_host, forward_port
         );
-        return Err(anyhow::anyhow!("Forward rule would create loop-back to proxy"));
+        return Err(anyhow::anyhow!(
+            "Forward rule would create loop-back to proxy"
+        ));
     }
 
     let method = req.method().clone();
@@ -901,11 +907,11 @@ async fn handle_https_connect(
                         rule.name, forward_host, forward_port
                     );
                     drop(rules);
-                    return Ok(Response::builder()
-                        .status(StatusCode::FORBIDDEN)
-                        .body(Full::new(Bytes::from("Forward rule would create loop-back to proxy")))?);
+                    return Ok(Response::builder().status(StatusCode::FORBIDDEN).body(
+                        Full::new(Bytes::from("Forward rule would create loop-back to proxy")),
+                    )?);
                 }
-                
+
                 debug!(
                     "Forwarding HTTPS CONNECT through proxy {}:{}",
                     forward_host, forward_port
@@ -1100,7 +1106,7 @@ async fn handle_tcp_tunnel(
                     drop(rules);
                     return Ok(());
                 }
-                
+
                 let target_host = host.clone().unwrap_or_default();
                 debug!(
                     "Forwarding TCP connection through proxy {}:{}",
