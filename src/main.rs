@@ -498,7 +498,9 @@ async fn handle_http_request(
     };
 
     let rules = state.rules.read().await;
-    let matching_rule = rules.iter().find(|rule| rule.is_enabled && ctx.matches_rule(rule));
+    let matching_rule = rules
+        .iter()
+        .find(|rule| rule.is_enabled && ctx.matches_rule(rule));
 
     if let Some(rule) = matching_rule {
         debug!(
@@ -865,7 +867,9 @@ async fn handle_https_connect(
     };
 
     let rules = state.rules.read().await;
-    let matching_rule = rules.iter().find(|rule| rule.is_enabled && ctx.matches_rule(rule));
+    let matching_rule = rules
+        .iter()
+        .find(|rule| rule.is_enabled && ctx.matches_rule(rule));
 
     enum ConnectMode {
         Direct(String),
@@ -1055,7 +1059,9 @@ async fn handle_tcp_tunnel(
     };
 
     let rules = state.rules.read().await;
-    let matching_rule = rules.iter().find(|rule| rule.is_enabled && ctx.matches_rule(rule));
+    let matching_rule = rules
+        .iter()
+        .find(|rule| rule.is_enabled && ctx.matches_rule(rule));
 
     enum TcpMode {
         Direct(String),
