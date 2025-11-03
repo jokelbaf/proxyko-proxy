@@ -23,7 +23,7 @@ Then run the container:
 docker run -d --name proxyko-proxy --restart unless-stopped -p 8041:8041 -e HOST=0.0.0.0 -e PORT=8041 -e INTERNAL_API_KEY=... -e PROXYKO_HOST=1.2.3.4 -e PROXYKO_PORT=8032 -e RUST_LOG=info proxyko-proxy:latest
 ```
 
-> ![NOTE]
+> [!NOTE]
 > You should use docker compose to run the container in production. See [this example](https://github.com/jokelbaf/proxyko/blob/master/docker-compose.yml) in Proxyko repository.
 
 ## License
